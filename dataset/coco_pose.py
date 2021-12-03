@@ -9,7 +9,7 @@ import math
 from PIL import Image
 from torch.utils.data import Dataset
 from pycocotools import coco
-from utils import *
+from .utils import *
 
 class COCOHP(Dataset):
     def __init__(self,img_dir,json_anno_path,train_mode=True,model_inp_size=512):
@@ -174,8 +174,8 @@ class COCOHP(Dataset):
         return ret
 
 
-if __name__ == '__main__':
-    json_anno_path = "/home/hieunn/datasets/COCO/annotations/person_keypoints_val2017.json"
-    img_dir = "/home/hieunn/datasets/COCO/val/val2017"
-    ds = COCOHP(img_dir,json_anno_path)
-    ds[0]
+# if __name__ == '__main__':
+#     json_anno_path = "/home/hieunn/datasets/COCO/annotations/person_keypoints_val2017.json"
+#     img_dir = "/home/hieunn/datasets/COCO/val/val2017"
+#     ds = COCOHP(img_dir,json_anno_path)
+#     ds[0]
