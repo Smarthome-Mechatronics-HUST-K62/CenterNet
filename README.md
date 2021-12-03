@@ -1,7 +1,7 @@
 # CenterNet-Human-Detection-and-Human-Pose-Estimation
 
 ## Todo
-- [ ] Implement COCO dataset and dataloader.
+- [x] Implement COCO dataset.
 - [ ] Implement some backbones for CenterNet :
   - [ ] ResNet
   - [ ] MobileNet
