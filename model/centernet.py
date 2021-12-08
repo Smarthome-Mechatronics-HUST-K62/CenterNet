@@ -50,7 +50,7 @@ class CenterHead(nn.Module):
     
 
 class CenterNet(nn.Module):
-    def __init__(self):
+    def __init__(self,down_ratio=4):
         super(CenterNet,self).__init__()
         self.backbone = get_dla_34()
         self.head = CenterHead(self.backbone.intermediate_channel)

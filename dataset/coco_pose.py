@@ -4,12 +4,13 @@ import numpy as np
 import cv2
 import matplotlib.pyplot as plt
 import math
-
+import json
 
 from PIL import Image
 from torch.utils.data import Dataset
 from torchvision import transforms
 from pycocotools import coco
+from pycocotools.cocoeval import COCOeval
 from dataset.utils import *
 
 class COCOHP(Dataset):
@@ -82,7 +83,6 @@ class COCOHP(Dataset):
         inp = (inp.astype(np.float32) / 255.)
         if self.train_mode:
             color_aug(self._data_rng, inp, self._eig_val, self._eig_vec)
-        print(inp.shape)
         inp = (inp - np.array(self.mean).astype(np.float32)) / np.array(self.std).astype(np.float32)
 
         output_res = self.model_out_size
@@ -103,11 +103,11 @@ class COCOHP(Dataset):
         hp_mask = np.zeros((self.max_objs * num_joints), dtype=np.int64)
 
         draw_gaussian = draw_umich_gaussian
-
+        gt_det = []
+        
         for k in range(num_objs):
             ann = annos[k]
             bbox = coco_box_to_bbox(ann['bbox'])
-            print(bbox)
             cls_id = int(ann['category_id']) - 1
             pts = np.array(ann['keypoints'], np.float32).reshape(num_joints, 3)
             
@@ -152,7 +152,9 @@ class COCOHP(Dataset):
                             hp_mask[k * num_joints + j] = 1
                             draw_gaussian(hm_hp[j], pt_int, hp_radius)
                 draw_gaussian(hm[cls_id], ct_int, radius)
-        
+                gt_det.append([ct[0] - w / 2, ct[1] - h / 2, 
+                               ct[0] + w / 2, ct[1] + h / 2, 1] + 
+                               pts[:, :2].reshape(num_joints * 2).tolist() + [cls_id])
         ret = {
             "input": transforms.ToTensor()(inp),
             
@@ -165,14 +167,60 @@ class COCOHP(Dataset):
             
             #for humanpose estimation
             "kps": torch.from_numpy(kps).float(), #(max_objs,num_joints * 2) : distance_x, distance_y from keypoints to center
-            "kps_mask": torch.from_numpy(kps_mask).long, #(max_objs,num_joints * 2)
+            "kps_mask": torch.from_numpy(kps_mask).long(), #(max_objs,num_joints * 2)
             "hm_hp": torch.from_numpy(hm_hp).float(), #(num_joins,output_res,output_res)
             "hp_offset": torch.from_numpy(hp_offset).float(), #(max_objs * num_joints, 2)
             "hp_mask": torch.from_numpy(hp_mask).long(), # (max_objs * num_joints,)
             "hp_inds": torch.from_numpy(hp_ind).long() #(max_objs * num_joints,)
         }
+        
+        if self.train_mode != True:
+            gt_det = np.array(gt_det, dtype=np.float32) if len(gt_det) > 0 else \
+                   np.zeros((1, 40), dtype=np.float32)
+            meta = {'c': c, 's': s, 'gt_det': gt_det, 'img_idx': img_idx}
+            ret['meta'] = meta
+            
         return ret 
 
+    
+    def convert_eval_format(self, all_bboxes):
+        detections = []
+        for image_id in all_bboxes:
+            category_id = 1
+            for dets in all_bboxes[image_id][category_id]:
+                bbox = dets[:4]
+                bbox[2] -= bbox[0]
+                bbox[3] -= bbox[1]
+                score = dets[4]
+                keypoint_prob = np.array(np.array(dets[39:56])>0.1).astype(np.int32).reshape(17,1)
+                keypoints = np.array(dets[5:39], dtype=np.float32).reshape(-1, 2)
+                bbox_out  = list(map(self._to_float, bbox))
+                keypoints_pred = np.concatenate([
+                keypoints, keypoint_prob], axis=1).reshape(51).tolist()
+                keypoints_pred  = list(map(self._to_float, keypoints_pred))
+
+                detection = {
+                  "image_id": int(image_id),
+                  "category_id": int(category_id),
+                  "bbox": bbox_out,
+                  "score": float("{:.2f}".format(score)),
+                  "keypoints": keypoints_pred
+                }
+                detections.append(detection)
+        return detections
+
+    def save_results(self, results, save_dir):
+        json.dump(self.convert_eval_format(results), 
+              open('{}/results.json'.format(save_dir), 'w'))
+
+
+    def run_eval(self, results):
+        coco_dets = self.coco.loadRes(self.convert_eval_format(results))        
+        coco_eval = COCOeval(self.coco, coco_dets, "keypoints")
+        coco_eval.evaluate()
+        coco_eval.accumulate()
+        coco_eval.summarize()
+        return coco_eval.stats[0]
 
 
 # if __name__ == '__main__':

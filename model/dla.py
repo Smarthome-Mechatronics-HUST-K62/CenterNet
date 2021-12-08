@@ -19,10 +19,10 @@ class DLA(nn.Module):
         
         return out_ups
 
-def get_dla_34():
+def get_dla_34(down_ratio=4):
     levels = [1,1,1,2,2,1]
     channels = [16,32,64,128,256,512]
-    return DLA(levels,channels)
+    return DLA(levels,channels,down_ratio=down_ratio)
 
 if __name__ == '__main__':
     import torch

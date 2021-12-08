@@ -1,10 +1,9 @@
 import torch.nn as nn
-from loss_components import *
+from loss.loss_components import *
 
 
-def loss(preds,targets):
+def loss(preds,targets,device):
     """[calculate total loss]
-
     Args:
         preds ([list of 4-D tensor]): [output of model]
         targets ([dict of tensor]): [ground truth]
@@ -13,17 +12,17 @@ def loss(preds,targets):
     pred_hm, pred_wh, pred_reg, pred_pose_hm, pred_pose_offset, pred_pose_kps = preds
     
     #get ground-truth
-    target_hm = targets["hm"] # (batchsize,1,output_res,output_res) 
-    target_reg = targets["reg"] # (batchsize,max_objs,2)
-    target_wh = targets["wh"] # (batchsize,max_objs,2)
-    target_reg_mask = targets["reg_mask"] #(batchsize,max_objs)
-    target_inds = targets["inds"] #(batchsize,max_objs)
-    target_kps = targets["kps"] #(batchsize,max_objs,num_joints * 2)
-    target_kps_mask = targets["kps_mask"] #(batchsize,max_objs,num_joints * 2)
-    target_pose_hm = targets["hm_hp"] #(batchsize,num_joins,output_res,output_res)
-    target_hp_offset = targets["hp_offset"] #(batchsize,max_objs * num_joints, 2)
-    target_hp_mask = targets["hp_mask"] # (batchsize,max_objs * num_joints)
-    target_hp_inds = targets["hp_inds"] # (batchsize,max_objs * num_joints)
+    target_hm = targets["hm"].to(device) # (batchsize,1,output_res,output_res) 
+    target_reg = targets["reg"].to(device) # (batchsize,max_objs,2)
+    target_wh = targets["wh"].to(device) # (batchsize,max_objs,2)
+    target_reg_mask = targets["reg_mask"].to(device) #(batchsize,max_objs)
+    target_inds = targets["inds"].to(device) #(batchsize,max_objs)
+    target_kps = targets["kps"].to(device) #(batchsize,max_objs,num_joints * 2)
+    target_kps_mask = targets["kps_mask"].to(device) #(batchsize,max_objs,num_joints * 2)
+    target_pose_hm = targets["hm_hp"].to(device) #(batchsize,num_joins,output_res,output_res)
+    target_hp_offset = targets["hp_offset"].to(device) #(batchsize,max_objs * num_joints, 2)
+    target_hp_mask = targets["hp_mask"].to(device) # (batchsize,max_objs * num_joints)
+    target_hp_inds = targets["hp_inds"].to(device) # (batchsize,max_objs * num_joints)
     
     #calculcate heatmap loss (for detection) and pose heatmap loss (for pose estimation)
     pred_hm = torch.clamp(pred_hm.sigmoid_(),min=1e-4,max=1-1e-4)
@@ -42,6 +41,3 @@ def loss(preds,targets):
     loss = hm_loss + 0.1 * wh_loss + reg_loss + pose_hm_loss + pose_reg_loss + keypoint_loss
     
     return loss
-    
-
-    
