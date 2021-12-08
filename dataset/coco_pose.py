@@ -1,4 +1,5 @@
 import os
+import torch
 import numpy as np
 import cv2
 import matplotlib.pyplot as plt
@@ -7,11 +8,12 @@ import math
 
 from PIL import Image
 from torch.utils.data import Dataset
+from torchvision import transforms
 from pycocotools import coco
 from dataset.utils import *
 
 class COCOHP(Dataset):
-    def __init__(self,img_dir,json_anno_path,train_mode=True,model_inp_size=512):
+    def __init__(self,img_dir,json_anno_path,train_mode=True,model_inp_size=512,down_ratio=4):
         self.train_mode = train_mode
         self.img_dir = img_dir
         self.coco = coco.COCO(json_anno_path)
@@ -20,7 +22,7 @@ class COCOHP(Dataset):
         self.mean = [0.408, 0.447, 0.470]
         self.std = [0.289, 0.274, 0.278]
         self.model_inp_size = model_inp_size
-        self.model_out_size = model_inp_size // 4
+        self.model_out_size = model_inp_size // down_ratio
         self._data_rng = np.random.RandomState(123)
         self._eig_val = np.array([0.2141788, 0.01817699, 0.00341571],dtype=np.float32)
         self._eig_vec = np.array([
@@ -82,7 +84,6 @@ class COCOHP(Dataset):
             color_aug(self._data_rng, inp, self._eig_val, self._eig_vec)
         print(inp.shape)
         inp = (inp - np.array(self.mean).astype(np.float32)) / np.array(self.std).astype(np.float32)
-        inp = inp.transpose(2, 0, 1)
 
         output_res = self.model_out_size
         num_joints = self.num_joints
@@ -153,22 +154,22 @@ class COCOHP(Dataset):
                 draw_gaussian(hm[cls_id], ct_int, radius)
         
         ret = {
-            "input": inp,
+            "input": transforms.ToTensor()(inp),
             
             #for object detection
-            "hm" : hm, # (1,output_res,output_res) 
-            "reg": reg, # (max_objs,2)
-            "wh" : wh, # (max_objs,2)
-            "reg_mask": reg_mask, #(max_objs,)
-            "ind": ind, #(max_objs,) (flat index )
+            "hm" : torch.from_numpy(hm).float(), # (1,output_res,output_res) 
+            "reg": torch.from_numpy(reg).float(), # (max_objs,2)
+            "wh" : torch.from_numpy(wh).float(), # (max_objs,2)
+            "reg_mask": torch.from_numpy(reg_mask).long(), #(max_objs,)
+            "inds": torch.from_numpy(ind).long(), #(max_objs,) (flat index )
             
             #for humanpose estimation
-            "kps": kps, #(max_objs,num_joints * 2) : distance_x, distance_y from keypoints to center
-            "kps_mask": kps_mask, #(max_objs,num_joints * 2)
-            "hm_hp": hm_hp, #(num_joins,output_res,output_res)
-            "hp_offset": hp_offset, #(max_objs * num_joints, 2)
-            "hp_mask": hp_mask, # (max_objs * num_joints,)
-            "hp_ind": hp_ind #(max_objs * num_joints,)
+            "kps": torch.from_numpy(kps).float(), #(max_objs,num_joints * 2) : distance_x, distance_y from keypoints to center
+            "kps_mask": torch.from_numpy(kps_mask).long, #(max_objs,num_joints * 2)
+            "hm_hp": torch.from_numpy(hm_hp).float(), #(num_joins,output_res,output_res)
+            "hp_offset": torch.from_numpy(hp_offset).float(), #(max_objs * num_joints, 2)
+            "hp_mask": torch.from_numpy(hp_mask).long(), # (max_objs * num_joints,)
+            "hp_inds": torch.from_numpy(hp_ind).long() #(max_objs * num_joints,)
         }
         return ret 
 
